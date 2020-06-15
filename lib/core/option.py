@@ -1842,6 +1842,7 @@ def _setConfAttributes():
     conf.trafficFP = None
     conf.HARCollectorFactory = None
     conf.fileWriteType = None
+    conf.codeDxReport = None
 
 def _setKnowledgeBaseAttributes(flushAll=True):
     """
@@ -2035,6 +2036,7 @@ def _setKnowledgeBaseAttributes(flushAll=True):
     kb.xpCmdshellAvailable = False
 
     if flushAll:
+        kb.accumInjections = []
         kb.checkSitemap = None
         kb.headerPaths = {}
         kb.keywords = set(getFileItems(paths.SQL_KEYWORDS))
