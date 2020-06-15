@@ -419,7 +419,7 @@ def _saveToCodeDxReport():
                     currentRequestBody = urldecode(currentPayload)
                     payloadHandled = True
                 
-                # This may be insufficient (comparing to `paramType` calculated in _formatInjection),
+                # TODO: This may be insufficient (comparing to `paramType` calculated in _formatInjection),
                 # should reassess this approach and may need to capture extra information while collecting
                 # accumInjections
                 currentMethod = method or injectionPlaceToMethod.get(injection.place)
@@ -473,6 +473,24 @@ def _saveToCodeDxReport():
 
                 # Vector is generic info on the vuln., as a broader description than just
                 # the data payload
+                #
+                # Storage here is just a copy/paste of what's used in `_formatInjection`,
+                # don't have test cases that show `vector` data at this time
+                vector = sdata.vector
+                if stype == PAYLOAD.TECHNIQUE.UNION:
+                    vector = agent.forgeUnionQuery("[QUERY]", vector[0], vector[1], vector[2], None, None, vector[5], vector[6])
+                elif sdata.comment:
+                    vector = "%s%s" % (vector, sdata.comment)
+                
+                # Without proper test cases we can't verify that we're handling all possible
+                # values correctly. This provides some sort of fallback for that case
+                if vector is not None:
+                    if not isinstance(vector, str):
+                        logger.warn("vector is not `None` but also isn't a string; converting to string")
+                        vector = str(vector)
+                        logger.warn("vector converted to: %s" % vector)
+                    
+                    XML.SubElement(metadata, 'value', attrib={'key': 'vector'}).text = vector
 
                 # TODO: Should figure out when to truncate this
                 if not payloadHandled:
