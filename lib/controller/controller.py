@@ -470,6 +470,7 @@ def _saveToCodeDxReport():
                 XML.SubElement(metadata, 'value', attrib={'key': 'clause'}).text = PAYLOAD.CLAUSE[injection.clause]
                 XML.SubElement(metadata, 'value', attrib={'key': 'dbms'}).text = injection.dbms
                 XML.SubElement(metadata, 'value', attrib={'key': 'dbms_version'}).text = injection.dbms_version
+                XML.SubElement(metadata, 'value', attrib={'key': 'payload_type'}).text = PAYLOAD.PARAMETER[injection.ptype]
 
                 # Vector is generic info on the vuln., as a broader description than just
                 # the data payload
