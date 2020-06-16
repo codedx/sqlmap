@@ -433,3 +433,8 @@ class FUZZ_UNION_COLUMN:
     STRING = "<string>"
     INTEGER = "<integer>"
     NULL = "NULL"
+
+class EXPORT_BEHAVIOR:
+    OVERWRITE = "overwrite"
+    APPEND = "append"
+    PROMPT = "prompt"

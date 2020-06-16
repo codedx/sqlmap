@@ -228,6 +228,8 @@ optDict = {
         "testFilter": "string",
         "testSkip": "string",
         "webRoot": "string",
+        "codeDxReport": "string",
+        "codeDxExportBehavior": "string"
     },
 
     "Miscellaneous": {

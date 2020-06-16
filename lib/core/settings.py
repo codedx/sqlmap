@@ -365,6 +365,8 @@ BASIC_HELP_ITEMS = (
     "tor",
     "sqlmapShell",
     "wizard",
+    "codeDxReport",
+    "codeDxExportBehavior",
 )
 
 # Tags used for value replacements inside shell scripts

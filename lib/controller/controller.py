@@ -80,6 +80,7 @@ from lib.core.target import initTargetEnv
 from lib.core.target import setupTargetEnv
 from lib.utils.hash import crackHashFile
 
+from lib.core.enums import EXPORT_BEHAVIOR
 from thirdparty.six.moves import urllib as _urllib
 import xml.etree.ElementTree as XML
 import xml.dom.minidom
@@ -340,25 +341,35 @@ def _collapseHeaderValues(headers):
 
     return result
 
+# Source: https://stackoverflow.com/a/4590052/2692629
+def _indentXmlTree(elem, level=0):
+    i = "\n" + level*"\t"
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "\t"
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            _indentXmlTree(elem, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
 def _saveToCodeDxReport():
     if not conf.codeDxReport:
         return
 
-    root = XML.Element('report', attrib={'tool': 'sqlmap'})
-    findings = XML.SubElement(root, 'findings')
+    root = None
+    findings = None
 
-    allHttpMethods = [
-        HTTPMETHOD.GET,
-        HTTPMETHOD.POST,
-        HTTPMETHOD.HEAD,
-        HTTPMETHOD.PUT,
-        HTTPMETHOD.DELETE,
-        HTTPMETHOD.TRACE,
-        HTTPMETHOD.OPTIONS,
-        HTTPMETHOD.CONNECT,
-        HTTPMETHOD.PATCH
-    ]
+    if conf.codeDxExportBehavior == EXPORT_BEHAVIOR.APPEND and os.path.isfile(conf.codeDxReport):
+        root = XML.parse(conf.codeDxReport).getroot()
+        findings = root.find('findings')
+    else:
+        root = XML.Element('report', attrib={'tool': 'sqlmap'})
+        findings = XML.SubElement(root, 'findings')
 
     injectionPlaceToMethod = {
         PLACE.GET: HTTPMETHOD.GET,
@@ -380,6 +391,7 @@ def _saveToCodeDxReport():
         # Note: See `datatype.py` for `InjectionDict`
         for injection in injections:
             injectedParam = injection.parameter
+            clauseSummary = ", ".join([PAYLOAD.CLAUSE[clause] for clause in injection.clause])
 
             for stype, sdata in injection.data.items():
 
@@ -467,7 +479,7 @@ def _saveToCodeDxReport():
 
                 # Attach metadata info
                 metadata = XML.SubElement(finding, 'metadata')
-                XML.SubElement(metadata, 'value', attrib={'key': 'clause'}).text = PAYLOAD.CLAUSE[injection.clause]
+                XML.SubElement(metadata, 'value', attrib={'key': 'clause'}).text = clauseSummary
                 XML.SubElement(metadata, 'value', attrib={'key': 'dbms'}).text = injection.dbms
                 XML.SubElement(metadata, 'value', attrib={'key': 'dbms_version'}).text = injection.dbms_version
                 XML.SubElement(metadata, 'value', attrib={'key': 'payload_type'}).text = PAYLOAD.PARAMETER[injection.ptype]
@@ -498,12 +510,10 @@ def _saveToCodeDxReport():
                     xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'Payload'})
                     xmlPayload.text = currentPayload
 
+    _indentXmlTree(root)
 
-    # Pretty-print XML (https://stackoverflow.com/a/60193562)
-    xml_string = xml.dom.minidom.parseString(XML.tostring(root)).toprettyxml()
-    #xml_string = os.linesep.join([s for s in xml_string.splitlines() if s.strip()]) # remove the weird newline issue
-    with open(conf.codeDxReport, "w") as file_out:
-        file_out.write(xml_string)
+    tree = XML.ElementTree(root)
+    tree.write(conf.codeDxReport, encoding = 'UTF-8', xml_declaration = True)
 
 @stackedmethod
 def start():
