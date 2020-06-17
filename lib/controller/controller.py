@@ -374,7 +374,10 @@ def _saveToCodeDxReport():
     injectionPlaceToMethod = {
         PLACE.GET: HTTPMETHOD.GET,
         PLACE.POST: HTTPMETHOD.POST,
-        PLACE.CUSTOM_POST: HTTPMETHOD.POST
+        PLACE.CUSTOM_POST: HTTPMETHOD.POST,
+        # Will always be GET unless user specifies HTTP method, in which case
+        # `method` will take priority
+        PLACE.URI: HTTPMETHOD.GET
     }
 
     for entry in kb.accumInjections:
@@ -411,15 +414,16 @@ def _saveToCodeDxReport():
 
                 # Resolve request/response data for this specific finding
 
-                # We'll try to insert the payload contents where appropriate (eg
-                # query param for GET, request body for POST, etc.) but for PLACE.URI
-                # the usage isn't clear at this point. For unhandled cases like this, we'll
-                # attach the payload as metadata on the cdx finding so it's at least
-                # reported.
-                #
-                # TODO - Properly test for and handle findings with PLACE.URI
+                # We now insert the payload appropriately for all known cases (as far as we can tell), but
+                # keep track of whether the payload was actually handled just in case. (If it wasn't handled
+                # for whatever reason, it will be attached as metadata on the finding)
                 currentPayload = agent.adjustLateValues(sdata.payload)
                 payloadHandled = False
+
+                currentUrl = url
+                if injection.place == PLACE.URI:
+                    currentUrl = currentPayload
+                    payloadHandled = True
 
                 currentQuery = originalUrlQuery
                 if injection.place == PLACE.GET:
@@ -461,7 +465,7 @@ def _saveToCodeDxReport():
 
                 request = XML.SubElement(variant, 'request', attrib={
                     'method': currentMethod,
-                    'path': url, # TODO: Will need to change this for PLACE.URI support
+                    'path': currentUrl,
                     'query': currentQuery
                 })
 
@@ -473,9 +477,7 @@ def _saveToCodeDxReport():
                     requestBody = XML.SubElement(request, 'body', attrib={'truncated': 'false', 'original-length': str(len(currentRequestBody)), 'length': str(len(currentRequestBody))})
                     requestBody.text = currentRequestBody
 
-                # TODO: Is <response> available?
-                # (Sort-of - it's stored temporarily and discarded after constructing
-                # full injection info)
+                # TODO - Capture response info (headers + response body)
 
                 # Attach metadata info
                 metadata = XML.SubElement(finding, 'metadata')
