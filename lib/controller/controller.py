@@ -513,9 +513,16 @@ def _saveToCodeDxReport():
                     
                     XML.SubElement(metadata, 'value', attrib={'key': 'vector'}).text = vector
 
-                # TODO: Should figure out when to truncate this
                 if not payloadHandled:
-                    logger.warn("Failed to determine payload data storage method (unexpected edge-cases), will store as metadata instead")
+                    logger.warn("Failed to determine payload data storage method (unexpected edge-case), will store as metadata instead")
+                    
+                    currentPayload = str(currentPayload)
+                    payloadSize = len(currentPayload)
+
+                    if payloadSize > (10*1024):
+                        logger.warn("Payload is too large for metadata storage at %s characters, truncating to 10KB" % payloadSize)
+                        currentPayload = currentPayload[:10*1024]
+                    
                     xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'payload'})
                     xmlPayload.text = currentPayload
                 
