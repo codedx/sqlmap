@@ -380,6 +380,10 @@ def _saveToCodeDxReport():
         PLACE.URI: HTTPMETHOD.GET
     }
 
+    def attachMetadata(metadataContainer, key, value):
+        if value:
+            XML.SubElement(metadataContainer, 'value', attrib={'key': key}).text = value
+
     for entry in kb.accumInjections:
         target = entry.target
         injections = entry.injections
@@ -480,11 +484,13 @@ def _saveToCodeDxReport():
                 # TODO - Capture response info (headers + response body)
 
                 # Attach metadata info
-                metadata = XML.SubElement(finding, 'metadata')
-                XML.SubElement(metadata, 'value', attrib={'key': 'clause'}).text = clauseSummary
-                XML.SubElement(metadata, 'value', attrib={'key': 'dbms'}).text = injection.dbms
-                XML.SubElement(metadata, 'value', attrib={'key': 'dbms_version'}).text = injection.dbms_version
-                XML.SubElement(metadata, 'value', attrib={'key': 'payload_type'}).text = PAYLOAD.PARAMETER[injection.ptype]
+                metadata = XML.Element('metadata')
+                attachMetadata(metadata, 'clause', clauseSummary)
+                attachMetadata(metadata, 'dbms', injection.dbms)
+                attachMetadata(metadata, 'dbms_version', injection.dbms_version)
+                attachMetadata(metadata, 'payload_type', PAYLOAD.PARAMETER[injection.ptype])
+                attachMetadata(metadata, 'payload_prefix', injection.prefix)
+                attachMetadata(metadata, 'payload_suffix', injection.suffix)
 
                 # Vector is generic info on the vuln., as a broader description than just
                 # the data payload
@@ -511,6 +517,10 @@ def _saveToCodeDxReport():
                 if not payloadHandled:
                     xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'Payload'})
                     xmlPayload.text = currentPayload
+                
+                # "Elements with no subelements will test as False." - ElementTree docs
+                if metadata:
+                    finding.append(metadata)
 
     _indentXmlTree(root)
 
