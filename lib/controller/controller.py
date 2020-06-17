@@ -436,7 +436,7 @@ def _saveToCodeDxReport():
 
                 currentRequestBody = None
                 if injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
-                    currentRequestBody = urldecode(currentPayload)
+                    currentRequestBody = urldecode(currentPayload, unsafe="&", spaceplus=(injection.place != PLACE.GET and kb.postSpaceToPlus))
                     payloadHandled = True
                 
                 # TODO: This may be insufficient (comparing to `paramType` calculated in _formatInjection),
@@ -515,7 +515,8 @@ def _saveToCodeDxReport():
 
                 # TODO: Should figure out when to truncate this
                 if not payloadHandled:
-                    xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'Payload'})
+                    logger.warn("Failed to determine payload data storage method (unexpected edge-cases), will store as metadata instead")
+                    xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'payload'})
                     xmlPayload.text = currentPayload
                 
                 # "Elements with no subelements will test as False." - ElementTree docs
