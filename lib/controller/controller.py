@@ -83,7 +83,8 @@ from lib.utils.hash import crackHashFile
 from lib.core.enums import EXPORT_BEHAVIOR
 from thirdparty.six.moves import urllib as _urllib
 import xml.etree.ElementTree as XML
-import xml.dom.minidom
+from datetime import date
+import base64
 
 from lib.core.datatype import AttribDict
 
@@ -371,6 +372,9 @@ def _saveToCodeDxReport():
         root = XML.Element('report', attrib={'tool': 'sqlmap'})
         findings = XML.SubElement(root, 'findings')
 
+    now = date.today()
+    root.set('date', now.strftime("%Y-%m-%d"))
+
     injectionPlaceToMethod = {
         PLACE.GET: HTTPMETHOD.GET,
         PLACE.POST: HTTPMETHOD.POST,
@@ -439,9 +443,6 @@ def _saveToCodeDxReport():
                     currentRequestBody = urldecode(currentPayload, unsafe="&", spaceplus=(injection.place != PLACE.GET and kb.postSpaceToPlus))
                     payloadHandled = True
                 
-                # TODO: This may be insufficient (comparing to `paramType` calculated in _formatInjection),
-                # should reassess this approach and may need to capture extra information while collecting
-                # accumInjections
                 currentMethod = method or injectionPlaceToMethod.get(injection.place)
                 if currentMethod is None:
                     logger.warn("Unable to infer HTTP method used for injection %s, defaulting to GET" % sdata.title)
@@ -479,7 +480,8 @@ def _saveToCodeDxReport():
 
                 if currentRequestBody is not None and injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
                     requestBody = XML.SubElement(request, 'body', attrib={'truncated': 'false', 'original-length': str(len(currentRequestBody)), 'length': str(len(currentRequestBody))})
-                    requestBody.text = currentRequestBody
+                    requestAsBase64 = base64.b64encode(currentRequestBody.encode("UTF-8"))
+                    requestBody.text = str(requestAsBase64, encoding='UTF-8')
 
                 # TODO - Capture response info (headers + response body)
 
@@ -515,7 +517,7 @@ def _saveToCodeDxReport():
 
                 if not payloadHandled:
                     logger.warn("Failed to determine payload data storage method (unexpected edge-case), will store as metadata instead")
-                    
+
                     currentPayload = str(currentPayload)
                     payloadSize = len(currentPayload)
 
