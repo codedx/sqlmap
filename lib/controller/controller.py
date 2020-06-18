@@ -403,6 +403,7 @@ def _saveToCodeDxReport():
         for injection in injections:
             injectedParam = injection.parameter
             clauseSummary = ", ".join([PAYLOAD.CLAUSE[clause] for clause in injection.clause])
+            dbmsVersionSummary = ", ".join(injection.dbms_version) if injection.dbms_version else None
 
             for stype, sdata in injection.data.items():
 
@@ -489,7 +490,7 @@ def _saveToCodeDxReport():
                 metadata = XML.Element('metadata')
                 attachMetadata(metadata, 'clause', clauseSummary)
                 attachMetadata(metadata, 'dbms', injection.dbms)
-                attachMetadata(metadata, 'dbms_version', injection.dbms_version)
+                attachMetadata(metadata, 'dbms_version', dbmsVersionSummary)
                 attachMetadata(metadata, 'payload_type', PAYLOAD.PARAMETER[injection.ptype])
                 attachMetadata(metadata, 'payload_prefix', injection.prefix)
                 attachMetadata(metadata, 'payload_suffix', injection.suffix)
