@@ -304,7 +304,7 @@ def _collapseHeaderValues(headers):
     # for Cookies, merge the contents instead.
     #
     # Need to also consider case-insensitivity of header values; headers
-    # are mapped after lower-case transform, and the "cases" version
+    # are mapped after lower-case transform, and the "cased" version
     # of the header name is just taken from the first occurrence of that header
     # value. (Eg if "Cookie" and "COOKIE" appear, in that order, values are
     # processed under "cookie" but returned under "Cookie" rather than "COOKIE".)
@@ -384,6 +384,49 @@ def _saveToCodeDxReport():
         PLACE.URI: HTTPMETHOD.GET
     }
 
+    # Sometimes we get the proper name of a parameter, other times we just get a generic "#1"/"#2"/etc.
+    anonymousParamPattern = re.compile("^#\\d+\\*?$")
+
+    namedParamToElement = {
+        PLACE.GET: 'query-parameter',
+        # TODO - Haven't found a meaningful distinction yet between POST and
+        #        CUSTOM_POST, this handling may need tweaks
+        PLACE.POST: 'form-field',
+        PLACE.CUSTOM_POST: 'form-field',
+        PLACE.URI: 'url',
+        PLACE.COOKIE: 'cookie',
+        PLACE.USER_AGENT: 'http-header',
+        PLACE.REFERER: 'http-header',
+        PLACE.HOST: 'http-header',
+        PLACE.CUSTOM_HEADER: 'http-header'
+    }
+
+    anonymousParamToElement = {
+        PLACE.GET: 'query-string',
+        PLACE.POST: 'request-body',
+        PLACE.CUSTOM_POST: 'request-body',
+        PLACE.URI: 'url',
+        PLACE.COOKIE: 'cookie',
+        PLACE.USER_AGENT: 'http-header',
+        PLACE.REFERER: 'http-header',
+        PLACE.HOST: 'http-header',
+        PLACE.CUSTOM_HEADER: 'http-header'
+    }
+
+    # Determines how to construct the <element> item in a finding, which indicates
+    # what/where an injection/vuln. occurred
+    def paramToCodeDxElement(paramName, place):
+        paramIsAnonymous = anonymousParamPattern.match(injectedParam) is not None
+
+        elementType = None
+        elementName = None if paramIsAnonymous else paramName
+
+        if paramIsAnonymous:
+            return (elementName, anonymousParamToElement[place])
+        else:
+            return (elementName, namedParamToElement[place])
+        
+
     def attachMetadata(metadataContainer, key, value):
         if value:
             XML.SubElement(metadataContainer, 'value', attrib={'key': key}).text = value
@@ -417,7 +460,17 @@ def _saveToCodeDxReport():
 
                 XML.SubElement(finding, 'cwe', attrib={'id': '89'})
 
-                location = XML.SubElement(finding, 'location', attrib={'type': 'url', 'path': url})
+                elementName, elementType = paramToCodeDxElement(injectedParam, injection.place)
+                xmlElement = XML.SubElement(finding, 'element', attrib={'type': elementType})
+                if elementName is not None:
+                    xmlElement.set('name', elementName)
+
+                currentPayload = agent.adjustLateValues(sdata.payload)
+
+                location = XML.SubElement(finding, 'location', attrib={
+                    'type': 'url',
+                    'path': currentPayload if injection.place == PLACE.URI else url
+                })
                 variants = XML.SubElement(location, 'variants')
                 variant = XML.SubElement(variants, 'variant')
 
@@ -426,7 +479,6 @@ def _saveToCodeDxReport():
                 # We now insert the payload appropriately for all known cases (as far as we can tell), but
                 # keep track of whether the payload was actually handled just in case. (If it wasn't handled
                 # for whatever reason, it will be attached as metadata on the finding)
-                currentPayload = agent.adjustLateValues(sdata.payload)
                 payloadHandled = False
 
                 currentUrl = url
