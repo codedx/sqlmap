@@ -2406,17 +2406,6 @@ def _checkCodeDxExport():
         errMsg = "output directory '%s' for Code Dx report export does not exist or is not a directory" % basepath
         raise SqlmapValueException(errMsg)
 
-    if os.path.isfile(conf.codeDxReport):
-        if exportBehavior == EXPORT_BEHAVIOR.PROMPT:
-            msg = "the target file for Code Dx export already exists, should the file be Replaced or Appended? [r/A] "
-            choice = readInput(msg, default = "A").upper()
-            if choice == "R":
-                exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
-            else:
-                exportBehavior = EXPORT_BEHAVIOR.APPEND
-    else:
-        exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
-
     conf.codeDxExportBehavior = exportBehavior
     logger.info("Code Dx export is enabled using '%s' to handle conflicts" % conf.codeDxExportBehavior)
 

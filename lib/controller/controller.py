@@ -358,12 +358,30 @@ def _indentXmlTree(elem, level=0):
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
 
+def _validateCodeDxTargetFile():
+    exportBehavior = conf.codeDxExportBehavior
+
+    if os.path.isfile(conf.codeDxReport):
+        if exportBehavior == EXPORT_BEHAVIOR.PROMPT:
+            msg = "the target file for Code Dx export already exists, should the file be Replaced or Appended? [r/A] "
+            choice = readInput(msg, default = "A").upper()
+            if choice == "R":
+                exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
+            else:
+                exportBehavior = EXPORT_BEHAVIOR.APPEND
+    else:
+        exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
+    
+    conf.codeDxExportBehavior = exportBehavior
+
 def _saveToCodeDxReport():
     if not conf.codeDxReport:
         return
 
     root = None
     findings = None
+
+    _validateCodeDxTargetFile()
 
     if conf.codeDxExportBehavior == EXPORT_BEHAVIOR.APPEND and os.path.isfile(conf.codeDxReport):
         root = XML.parse(conf.codeDxReport).getroot()
