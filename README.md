@@ -1,73 +1,57 @@
-# sqlmap ![](https://i.imgur.com/fe85aVR.png)
+# sqlmap ![](https://i.imgur.com/fe85aVR.png) (Code Dx Fork)
 
-[![Build Status](https://api.travis-ci.org/sqlmapproject/sqlmap.svg?branch=master)](https://travis-ci.org/sqlmapproject/sqlmap) [![Python 2.6|2.7|3.x](https://img.shields.io/badge/python-2.6|2.7|3.x-yellow.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/license-GPLv2-red.svg)](https://raw.githubusercontent.com/sqlmapproject/sqlmap/master/LICENSE) [![PyPI version](https://badge.fury.io/py/sqlmap.svg)](https://badge.fury.io/py/sqlmap) [![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/sqlmapproject/sqlmap.svg?colorB=ff69b4)](https://github.com/sqlmapproject/sqlmap/issues?q=is%3Aissue+is%3Aclosed) [![Twitter](https://img.shields.io/badge/twitter-@sqlmap-blue.svg)](https://twitter.com/sqlmap)
+**This is a modified version of the popular penetration-testing tool [sqlmap](https://github.com/sqlmapproject/sqlmap). For more information on sqlmap, please refer to the original repository.**
 
-sqlmap is an open source penetration testing tool that automates the process of detecting and exploiting SQL injection flaws and taking over of database servers. It comes with a powerful detection engine, many niche features for the ultimate penetration tester, and a broad range of switches including database fingerprinting, over data fetching from the database, accessing the underlying file system, and executing commands on the operating system via out-of-band connections.
+This fork of sqlmap adds flags for generating reports in the Code Dx XML format. Files generated using the added functionality can be ingested directly by Code Dx.
 
-**The sqlmap project is currently searching for sponsor(s).**
+## Usage
 
-Screenshots
-----
+**Before using this fork, please read the disclaimer in the section below.**
 
-![Screenshot](https://raw.github.com/wiki/sqlmapproject/sqlmap/images/sqlmap_screenshot.png)
+### Quickstart
 
-You can visit the [collection of screenshots](https://github.com/sqlmapproject/sqlmap/wiki/Screenshots) demonstrating some of the features on the wiki.
+```
+git clone https://github.com/codedx/sqlmap
+cd sqlmap
+python sqlmap.py --codedx <target-file> <... other args>
+```
 
-Installation
-----
+This fork of sqlmap has the same usage and features as the original `sqlmap`. It adds the following parameters:
 
-You can download the latest tarball by clicking [here](https://github.com/sqlmapproject/sqlmap/tarball/master) or latest zipball by clicking  [here](https://github.com/sqlmapproject/sqlmap/zipball/master).
+```
+--codedx <target-file>       Enables export of injections to the designated Code Dx XML file.
+                             This includes URL, HTTP method, headers, request body, vector,
+                             and other data related to the injection. Injections that are
+                             detected to be false positives are ignored.
 
-Preferably, you can download sqlmap by cloning the [Git](https://github.com/sqlmapproject/sqlmap) repository:
+--codedx-conflict <action>   Determines what action to take if the target file already exists.
+                             Has no effect if --codedx parameter is not used. Valid values
+                             are (prompt, overwrite, append). If this parameter is not
+                             specified, 'prompt' will be used as the default.
+                             
+                             Conflict checks are done when sqlmap starts; if the file exists,
+                             the conflict will be handled automatically based on the conflict
+                             action. If the file does not exist, the action will default to
+                             'overwrite'.
+```
 
-    git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git sqlmap-dev
+### Modes of Operation
 
-sqlmap works out of the box with [Python](http://www.python.org/download/) version **2.6**, **2.7** and **3.x** on any platform.
+There are two main ways to use Code Dx XML export:
 
-Usage
-----
+1. Have all sqlmap instances append to the same XML file. (`--codedx-conflict append`) This approach cannot be used if multiple sqlmap instances are being ran in parallel.
+2. Have all sqlmap instances write to different files, and upload all XML files to Code Dx at once during an analysis. The only downside is needing to manage multiple XML files, rather than one merged file.
 
-To get a list of basic options and switches use:
+Both approaches are valid and indistinguishable, you do not lose any data or features by using one approach over another. Please use the appropriate mode of operation depending on whether you are running multiple sqlmap instances in parallel.
 
-    python sqlmap.py -h
+## Disclaimer
 
-To get a list of all options and switches use:
+This fork has been ran through a number of test cases, and all test cases have passed manual validation. Due to the range of sqlmap features, we can't guarantee that all detected injections will be reported in all cases. When first using this fork, we recommend comparing the generated XML against the injections listed by sqlmap in the console. Please report any cases of missing results as a new issue on this repository, or send an email to us at `support@codedx.com`.
 
-    python sqlmap.py -hh
+If there are no missed injections between the XML and console output, it should be safe to continue using this fork while assuming that all injections will be reported. This validation should be repeated if you make significant changes to your sqlmap configuration. (eg different set of target URLs, different set of parameters, etc.)
 
-You can find a sample run [here](https://asciinema.org/a/46601).
-To get an overview of sqlmap capabilities, a list of supported features, and a description of all options and switches, along with examples, you are advised to consult the [user's manual](https://github.com/sqlmapproject/sqlmap/wiki/Usage).
+## Reporting Bugs
 
-Links
-----
+If you encounter a crash or other unexpected behavior, please open an issue on this Github repository. We will determine whether it's an issue related to our changes or a pre-existing issue with sqlmap. Depending on the cause, we may make changes here or suggest posting a new issue on the [original sqlmap repository](https://github.com/sqlmapproject/sqlmap/issues).
 
-* Homepage: http://sqlmap.org
-* Download: [.tar.gz](https://github.com/sqlmapproject/sqlmap/tarball/master) or [.zip](https://github.com/sqlmapproject/sqlmap/zipball/master)
-* Commits RSS feed: https://github.com/sqlmapproject/sqlmap/commits/master.atom
-* Issue tracker: https://github.com/sqlmapproject/sqlmap/issues
-* User's manual: https://github.com/sqlmapproject/sqlmap/wiki
-* Frequently Asked Questions (FAQ): https://github.com/sqlmapproject/sqlmap/wiki/FAQ
-* Twitter: [@sqlmap](https://twitter.com/sqlmap)
-* Demos: [http://www.youtube.com/user/inquisb/videos](http://www.youtube.com/user/inquisb/videos)
-* Screenshots: https://github.com/sqlmapproject/sqlmap/wiki/Screenshots
-
-Translations
-----
-
-* [Bulgarian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-bg-BG.md)
-* [Chinese](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-zh-CN.md)
-* [Croatian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-hr-HR.md)
-* [French](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-fr-FR.md)
-* [German](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-de-GER.md)
-* [Greek](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-gr-GR.md)
-* [Indonesian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-id-ID.md)
-* [Italian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-it-IT.md)
-* [Japanese](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-ja-JP.md)
-* [Korean](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-ko-KR.md)
-* [Persian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-fa-IR.md)
-* [Polish](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-pl-PL.md)
-* [Portuguese](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-pt-BR.md)
-* [Russian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-ru-RUS.md)
-* [Spanish](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-es-MX.md)
-* [Turkish](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-tr-TR.md)
-* [Ukrainian](https://github.com/sqlmapproject/sqlmap/blob/master/doc/translations/README-uk-UA.md)
+If there is a new feature or bugfix in sqlmap that isn't included in our fork, you can open an issue asking for us to merge in latest from sqlmap.
