@@ -296,7 +296,7 @@ def _parseCookies(cookieString):
         name = cookieParts[0]
         value = cookieParts[1] if len(cookieParts) == 2 else None
         result[name] = value
-    
+
     return result
 
 def _collapseHeaderValues(headers):
@@ -330,9 +330,9 @@ def _collapseHeaderValues(headers):
                     cookieEntries.append(cookie)
                 else:
                     cookieEntries.append("%s=%s" % (cookie, cookieValue))
-            
+
             headerEntries['cookie'] = ";".join(cookieEntries)
-    
+
     # Convert from dict back to list[(Key, Value)] while also reapplying
     # original header names
     result = []
@@ -371,12 +371,15 @@ def _validateCodeDxTargetFile():
                 exportBehavior = EXPORT_BEHAVIOR.APPEND
     else:
         exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
-    
+
     conf.codeDxExportBehavior = exportBehavior
+    logger.debug("evaluated export behavior is %s" % conf.codeDxExportBehavior)
 
 def _saveToCodeDxReport():
     if not conf.codeDxReport:
         return
+
+    logger.debug("starting code dx report export")
 
     root = None
     findings = None
@@ -384,9 +387,11 @@ def _saveToCodeDxReport():
     _validateCodeDxTargetFile()
 
     if conf.codeDxExportBehavior == EXPORT_BEHAVIOR.APPEND and os.path.isfile(conf.codeDxReport):
+        logger.debug("conflict mode is 'append' and target file exists, parsing pre-existing XML file")
         root = XML.parse(conf.codeDxReport).getroot()
         findings = root.find('findings')
     else:
+        logger.debug("conflict mode is not 'append' or target file doesn't exist, making new XML file")
         root = XML.Element('report', attrib={'tool': 'sqlmap'})
         findings = XML.SubElement(root, 'findings')
 
@@ -443,13 +448,17 @@ def _saveToCodeDxReport():
             return (elementName, anonymousParamToElement[place])
         else:
             return (elementName, namedParamToElement[place])
-        
+
 
     def attachMetadata(metadataContainer, key, value):
         if value:
             XML.SubElement(metadataContainer, 'value', attrib={'key': key}).text = value
 
+    logger.debug("starting injection serialization for %s accumInjection entries" % str(len(kb.accumInjections)))
+
     for entry in kb.accumInjections:
+        logger.debug("starting serialization for injection set (target %s) with %s entries" % (entry.target, len(entry.injections)))
+
         target = entry.target
         injections = entry.injections
 
@@ -462,11 +471,14 @@ def _saveToCodeDxReport():
 
         # Note: See `datatype.py` for `InjectionDict`
         for injection in injections:
+            logger.debug("serializing injection on param %s with %s sample entries" % (injection.parameter, str(len(injection.data))))
+
             injectedParam = injection.parameter
             clauseSummary = ", ".join([PAYLOAD.CLAUSE[clause] for clause in injection.clause])
             dbmsVersionSummary = ", ".join(injection.dbms_version) if injection.dbms_version else None
 
             for stype, sdata in injection.data.items():
+                logger.debug("starting serialization for injection sample of type %s" % PAYLOAD.SQLINJECTION[stype])
 
                 # Setup for top-level elements of this finding
                 finding = XML.SubElement(findings, 'finding', attrib={'severity': 'high'})
@@ -516,7 +528,7 @@ def _saveToCodeDxReport():
                 if injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
                     currentRequestBody = urldecode(currentPayload, unsafe="&", spaceplus=(injection.place != PLACE.GET and kb.postSpaceToPlus))
                     payloadHandled = True
-                
+
                 currentMethod = method or injectionPlaceToMethod.get(injection.place)
                 if currentMethod is None:
                     logger.warn("Unable to infer HTTP method used for injection %s, defaulting to GET" % sdata.title)
@@ -578,7 +590,7 @@ def _saveToCodeDxReport():
                     vector = agent.forgeUnionQuery("[QUERY]", vector[0], vector[1], vector[2], None, None, vector[5], vector[6])
                 elif sdata.comment:
                     vector = "%s%s" % (vector, sdata.comment)
-                
+
                 # Without proper test cases we can't verify that we're handling all possible
                 # values correctly. This provides some sort of fallback for that case
                 if vector is not None:
@@ -598,18 +610,23 @@ def _saveToCodeDxReport():
                     if payloadSize > (10*1024):
                         logger.warn("Payload is too large for metadata storage at %s characters, truncating to 10KB" % payloadSize)
                         currentPayload = currentPayload[:10*1024]
-                    
+
                     xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'payload'})
                     xmlPayload.text = currentPayload
-                
+
                 # "Elements with no subelements will test as False." - ElementTree docs
                 if metadata:
                     finding.append(metadata)
 
+    logger.debug("finished XML tree generation")
+
+    logger.debug("applying readable xML formatting before writing to file")
     _indentXmlTree(root)
 
+    logger.debug("writing XML document to disk at %s..." % conf.codeDxReport)
     tree = XML.ElementTree(root)
     tree.write(conf.codeDxReport, encoding = 'UTF-8', xml_declaration = True)
+    logger.debug("code dx report export done")
 
 @stackedmethod
 def start():

@@ -747,7 +747,7 @@ def cmdLineParser(argv=None):
 
         miscellaneous.add_argument("--wizard", dest="wizard", action="store_true",
             help="Simple wizard interface for beginner users")
-        
+
         miscellaneous.add_argument("--codedx", dest="codeDxReport",
             help="File path to export results to a Code Dx XML report")
 
