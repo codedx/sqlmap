@@ -478,6 +478,9 @@ def _saveToCodeDxReport():
 
                 XML.SubElement(finding, 'cwe', attrib={'id': '89'})
 
+                # TODO - This is for 2.5 XML format, though data is (unintentionally) being
+                #        written with 2.0 format. Will either need to remove this or update
+                #        export to more recent version for ingest
                 elementName, elementType = paramToCodeDxElement(injectedParam, injection.place)
                 xmlElement = XML.SubElement(finding, 'element', attrib={'type': elementType})
                 if elementName is not None:
