@@ -526,7 +526,7 @@ def _saveToCodeDxReport():
 
                 currentRequestBody = None
                 if injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
-                    currentRequestBody = urldecode(currentPayload, unsafe="&", spaceplus=(injection.place != PLACE.GET and kb.postSpaceToPlus))
+                    currentRequestBody = currentPayload
                     payloadHandled = True
 
                 currentMethod = method or injectionPlaceToMethod.get(injection.place)
