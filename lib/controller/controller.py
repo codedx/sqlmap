@@ -591,8 +591,6 @@ def _saveToCodeDxReport():
                 elif sdata.comment:
                     vector = "%s%s" % (vector, sdata.comment)
 
-                # Without proper test cases we can't verify that we're handling all possible
-                # values correctly. This provides some sort of fallback for that case
                 if vector is not None:
                     if not isinstance(vector, str):
                         logger.warn("vector is not `None` but also isn't a string; converting to string")
@@ -601,6 +599,8 @@ def _saveToCodeDxReport():
                     
                     XML.SubElement(metadata, 'value', attrib={'key': 'vector'}).text = vector
 
+                # Without a complete test suite we can't verify that we're handling all possible
+                # values correctly. This provides some sort of fallback for that case
                 if not payloadHandled:
                     logger.warn("Failed to determine payload data storage method (unexpected edge-case), will store as metadata instead")
 
