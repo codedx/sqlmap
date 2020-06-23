@@ -30,11 +30,6 @@ This fork of sqlmap has the same usage and features as the original `sqlmap`. It
                              Has no effect if --codedx parameter is not used. Valid values
                              are (prompt, overwrite, append). If this parameter is not
                              specified, 'prompt' will be used as the default.
-                             
-                             Conflict checks are done when sqlmap starts; if the file exists,
-                             the conflict will be handled automatically based on the conflict
-                             action. If the file does not exist, the action will default to
-                             'overwrite'.
 ```
 
 ### Modes of Operation
