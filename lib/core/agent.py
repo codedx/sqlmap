@@ -172,11 +172,15 @@ class Agent(object):
 
             newValue = "%s%s" % (value, newValue)
 
-        newValue = self.cleanupPayload(newValue, origValue)
+        newValue = self.cleanupPayload(newValue, origValue) or ""
 
         if base64Encoding:
             _newValue = newValue
             _origValue = origValue
+
+            if newValue:
+                newValue = newValue.replace(BOUNDARY_BACKSLASH_MARKER, '\\')
+                newValue = self.adjustLateValues(newValue)
 
             # TODO: support for POST_HINT
             newValue = encodeBase64(newValue, binary=False, encoding=conf.encoding or UNICODE_ENCODING)
