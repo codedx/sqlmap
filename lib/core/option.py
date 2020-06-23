@@ -158,6 +158,8 @@ from thirdparty.six.moves import urllib as _urllib
 from thirdparty.socks import socks
 from xml.etree.ElementTree import ElementTree
 
+from lib.core.enums import EXPORT_BEHAVIOR
+
 authHandler = _urllib.request.BaseHandler()
 chunkedHandler = ChunkedHandler()
 httpsHandler = HTTPSHandler()
@@ -1838,6 +1840,8 @@ def _setConfAttributes():
     conf.trafficFP = None
     conf.HARCollectorFactory = None
     conf.fileWriteType = None
+    conf.codeDxReport = None
+    conf.codeDxExportBehavior = EXPORT_BEHAVIOR.PROMPT
 
 def _setKnowledgeBaseAttributes(flushAll=True):
     """
@@ -2031,6 +2035,7 @@ def _setKnowledgeBaseAttributes(flushAll=True):
     kb.xpCmdshellAvailable = False
 
     if flushAll:
+        kb.accumInjections = []
         kb.checkSitemap = None
         kb.headerPaths = {}
         kb.keywords = set(getFileItems(paths.SQL_KEYWORDS))
@@ -2377,6 +2382,29 @@ def _checkTor():
         infoMsg = "Tor is properly being used"
         logger.info(infoMsg)
 
+def _checkCodeDxExport():
+    if not conf.codeDxReport:
+        return
+
+    # Validate conflict resolution option
+    allBehaviors = [EXPORT_BEHAVIOR.PROMPT, EXPORT_BEHAVIOR.APPEND, EXPORT_BEHAVIOR.OVERWRITE]
+    
+    exportBehavior = conf.codeDxExportBehavior or EXPORT_BEHAVIOR.PROMPT
+    exportBehavior = exportBehavior.lower().strip()
+    if not exportBehavior in allBehaviors:
+        errMsg = "value '%s' for option '--codedx-conflict' (codeDxExportBehavior) must be one of: [%s]" % (exportBehavior, " | ".join(allBehaviors))
+        raise SqlmapSyntaxException(errMsg)
+
+    # Validate output path
+    conf.codeDxReport = os.path.abspath(conf.codeDxReport)
+    (basepath, _) = os.path.split(conf.codeDxReport)
+    if not os.path.isdir(basepath):
+        errMsg = "output directory '%s' for Code Dx report export does not exist or is not a directory" % basepath
+        raise SqlmapValueException(errMsg)
+
+    conf.codeDxExportBehavior = exportBehavior
+    logger.info("Code Dx export is enabled using '%s' to handle conflicts" % conf.codeDxExportBehavior)
+
 def _basicOptionValidation():
     if conf.limitStart is not None and not (isinstance(conf.limitStart, int) and conf.limitStart > 0):
         errMsg = "value for option '--start' (limitStart) must be an integer value greater than zero (>0)"
@@ -2652,6 +2680,7 @@ def _basicOptionValidation():
             errMsg = "cookies file '%s' does not exist" % conf.loadCookies
             raise SqlmapFilePathException(errMsg)
 
+
 def initOptions(inputOptions=AttribDict(), overrideOptions=False):
     _setConfAttributes()
     _setKnowledgeBaseAttributes()
@@ -2674,6 +2703,7 @@ def init():
     _createHomeDirectories()
     _createTemporaryDirectory()
     _basicOptionValidation()
+    _checkCodeDxExport()
     _setProxyList()
     _setTorProxySettings()
     _setDNSServer()

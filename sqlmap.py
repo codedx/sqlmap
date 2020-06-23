@@ -258,7 +258,12 @@ def main():
         print()
         errMsg = unhandledExceptionMessage()
         excMsg = traceback.format_exc()
-        valid = checkIntegrity()
+        # valid = checkIntegrity()
+
+        # We want to bypass the validation checks and github auto-creation so we don't
+        # confuse the user between the original repo and the Code Dx fork.
+        #
+        # Integrity-related messages were updated below.
 
         os._exitcode = 255
 
@@ -391,14 +396,14 @@ def main():
         elif any(_ in excMsg for _ in ("Broken pipe",)):
             raise SystemExit
 
-        elif valid is False:
-            errMsg = "code integrity check failed (turning off automatic issue creation). "
-            errMsg += "You should retrieve the latest development version from official GitHub "
-            errMsg += "repository at '%s'" % GIT_PAGE
-            logger.critical(errMsg)
-            print()
-            dataToStdout(excMsg)
-            raise SystemExit
+        # elif valid is False:
+        #     errMsg = "code integrity check failed (turning off automatic issue creation). "
+        #     errMsg += "You should retrieve the latest development version from official GitHub "
+        #     errMsg += "repository at '%s'" % GIT_PAGE
+        #     logger.critical(errMsg)
+        #     print()
+        #     dataToStdout(excMsg)
+        #     raise SystemExit
 
         elif any(_ in excMsg for _ in ("tamper/", "waf/")):
             logger.critical(errMsg)
@@ -451,15 +456,21 @@ def main():
             file_ = re.sub(r"/{2,}", '/', file_)
             excMsg = excMsg.replace(match.group(1), file_)
 
+        errMsg = "an unexpected error occurred - consider opening a new issue on GitHub at https://github.com/codedx/sqlmap/issues"
+        errMsg += ""
+        logger.critical(errMsg)
+
         errMsg = maskSensitiveData(errMsg)
         excMsg = maskSensitiveData(excMsg)
 
-        if conf.get("api") or not valid:
-            logger.critical("%s\n%s" % (errMsg, excMsg))
-        else:
-            logger.critical(errMsg)
-            dataToStdout("%s\n" % setColor(excMsg.strip(), level=logging.CRITICAL))
-            createGithubIssue(errMsg, excMsg)
+        logger.critical("%s\n%s" % (errMsg, excMsg))
+
+        # if conf.get("api") or not valid:
+        #     logger.critical("%s\n%s" % (errMsg, excMsg))
+        # else:
+        #     logger.critical(errMsg)
+        #     dataToStdout("%s\n" % setColor(excMsg.strip(), level=logging.CRITICAL))
+        #     createGithubIssue(errMsg, excMsg)
 
     finally:
         kb.threadContinue = False

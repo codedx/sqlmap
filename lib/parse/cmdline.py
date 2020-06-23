@@ -751,6 +751,12 @@ def cmdLineParser(argv=None):
         miscellaneous.add_argument("--wizard", dest="wizard", action="store_true",
             help="Simple wizard interface for beginner users")
 
+        miscellaneous.add_argument("--codedx", dest="codeDxReport",
+            help="File path to export results to a Code Dx XML report")
+
+        miscellaneous.add_argument("--codedx-conflict", dest="codeDxExportBehavior",
+            help="Behavior when Code Dx output file already exists (overwrite | append | prompt)")
+
         # Hidden and/or experimental options
         parser.add_argument("--crack", dest="hashFile",
             help=SUPPRESS)  # "Load and crack hashes from a file (standalone)"

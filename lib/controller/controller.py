@@ -80,6 +80,14 @@ from lib.core.target import initTargetEnv
 from lib.core.target import setupTargetEnv
 from lib.utils.hash import crackHashFile
 
+from lib.core.enums import EXPORT_BEHAVIOR
+from thirdparty.six.moves import urllib as _urllib
+import xml.etree.ElementTree as XML
+from datetime import date
+import base64
+
+from lib.core.datatype import AttribDict
+
 def _selectInjection():
     """
     Selection function for injection place, parameters and type.
@@ -264,6 +272,361 @@ def _saveToResultsFile():
     except IOError as ex:
         errMsg = "unable to write to the results file '%s' ('%s'). " % (conf.resultsFile, getSafeExString(ex))
         raise SqlmapSystemException(errMsg)
+
+def dump(obj):
+    for attr in dir(obj):
+        print("obj.%s = %r" % (attr, getattr(obj, attr)))
+
+def _parseQueryParams(queryString):
+    result = {}
+    for param in queryString.split('&'):
+        parts = param.split('=')
+        paramName = parts[0]
+        paramValue = parts[1] if len(parts) > 1 else None
+        result[paramName] = paramValue
+    return result
+
+def _parseCookies(cookieString):
+    # Takes a cookie string eg "A=1;B=2;..."
+    # and returns a corresponding dict. Entries without
+    # a value will be returned, but mapped to None.
+    result = {}
+    for cookie in cookieString.split(';'):
+        cookieParts = cookie.split('=', 1)
+        name = cookieParts[0]
+        value = cookieParts[1] if len(cookieParts) == 2 else None
+        result[name] = value
+
+    return result
+
+def _collapseHeaderValues(headers):
+    # De-duplicate a list of (key, value) header values by discarding earlier values, and
+    # for Cookies, merge the contents instead.
+    #
+    # Need to also consider case-insensitivity of header values; headers
+    # are mapped after lower-case transform, and the "cased" version
+    # of the header name is just taken from the first occurrence of that header
+    # value. (Eg if "Cookie" and "COOKIE" appear, in that order, values are
+    # processed under "cookie" but returned under "Cookie" rather than "COOKIE".)
+    headerEntries = {}
+    headerNames = {}
+    for (header, value) in headers:
+        lowerHeader = header.lower()
+        if lowerHeader not in headerEntries:
+            headerEntries[lowerHeader] = value
+            headerNames[lowerHeader] = header
+        elif not lowerHeader == "cookie":
+            headerEntries[lowerHeader] = value
+        else:
+            # Merge cookie values (where cookie names ARE case-sensitive)
+            oldCookies = _parseCookies(headerEntries['cookie'])
+            newCookies = _parseCookies(value)
+
+            cookieEntries = []
+            keys = set(oldCookies.keys() + newCookies.keys())
+            for cookie in keys:
+                cookieValue = newCookies.get(cookie) or oldCookies.get(cookie)
+                if cookieValue is None:
+                    cookieEntries.append(cookie)
+                else:
+                    cookieEntries.append("%s=%s" % (cookie, cookieValue))
+
+            headerEntries['cookie'] = ";".join(cookieEntries)
+
+    # Convert from dict back to list[(Key, Value)] while also reapplying
+    # original header names
+    result = []
+    for (header, value) in headerEntries.items():
+        originalHeader = headerNames[header]
+        result.append((originalHeader, value))
+
+    return result
+
+# Source: https://stackoverflow.com/a/4590052/2692629
+def _indentXmlTree(elem, level=0):
+    i = "\n" + level*"\t"
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "\t"
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            _indentXmlTree(elem, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
+
+def _validateCodeDxTargetFile():
+    exportBehavior = conf.codeDxExportBehavior
+
+    if os.path.isfile(conf.codeDxReport):
+        if exportBehavior == EXPORT_BEHAVIOR.PROMPT:
+            msg = "the target file for Code Dx export already exists, should the file be Replaced or Appended? [r/A] "
+            choice = readInput(msg, default = "A").upper()
+            if choice == "R":
+                exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
+            else:
+                exportBehavior = EXPORT_BEHAVIOR.APPEND
+    else:
+        exportBehavior = EXPORT_BEHAVIOR.OVERWRITE
+
+    conf.codeDxExportBehavior = exportBehavior
+    logger.debug("evaluated export behavior is %s" % conf.codeDxExportBehavior)
+
+def _saveToCodeDxReport():
+    if not conf.codeDxReport:
+        return
+
+    logger.debug("starting code dx report export")
+
+    root = None
+    findings = None
+
+    _validateCodeDxTargetFile()
+
+    if conf.codeDxExportBehavior == EXPORT_BEHAVIOR.APPEND and os.path.isfile(conf.codeDxReport):
+        logger.debug("conflict mode is 'append' and target file exists, parsing pre-existing XML file")
+        root = XML.parse(conf.codeDxReport).getroot()
+        findings = root.find('findings')
+    else:
+        logger.debug("conflict mode is not 'append' or target file doesn't exist, making new XML file")
+        root = XML.Element('report', attrib={'tool': 'sqlmap'})
+        findings = XML.SubElement(root, 'findings')
+
+    now = date.today()
+    root.set('date', now.strftime("%Y-%m-%d"))
+
+    injectionPlaceToMethod = {
+        PLACE.GET: HTTPMETHOD.GET,
+        PLACE.POST: HTTPMETHOD.POST,
+        PLACE.CUSTOM_POST: HTTPMETHOD.POST,
+        # Will always be GET unless user specifies HTTP method, in which case
+        # `method` will take priority
+        PLACE.URI: HTTPMETHOD.GET
+    }
+
+    # Sometimes we get the proper name of a parameter, other times we just get a generic "#1"/"#2"/etc.
+    anonymousParamPattern = re.compile("^#\\d+\\*?$")
+
+    namedParamToElement = {
+        PLACE.GET: 'query-parameter',
+        # TODO - Haven't found a meaningful distinction yet between POST and
+        #        CUSTOM_POST, this handling may need tweaks
+        PLACE.POST: 'form-field',
+        PLACE.CUSTOM_POST: 'form-field',
+        PLACE.URI: 'url',
+        PLACE.COOKIE: 'cookie',
+        PLACE.USER_AGENT: 'http-header',
+        PLACE.REFERER: 'http-header',
+        PLACE.HOST: 'http-header',
+        PLACE.CUSTOM_HEADER: 'http-header'
+    }
+
+    anonymousParamToElement = {
+        PLACE.GET: 'query-string',
+        PLACE.POST: 'request-body',
+        PLACE.CUSTOM_POST: 'request-body',
+        PLACE.URI: 'url',
+        PLACE.COOKIE: 'cookie',
+        PLACE.USER_AGENT: 'http-header',
+        PLACE.REFERER: 'http-header',
+        PLACE.HOST: 'http-header',
+        PLACE.CUSTOM_HEADER: 'http-header'
+    }
+
+    # Determines how to construct the <element> item in a finding, which indicates
+    # what/where an injection/vuln. occurred
+    def paramToCodeDxElement(paramName, place):
+        paramIsAnonymous = anonymousParamPattern.match(injectedParam) is not None
+
+        elementType = None
+        elementName = None if paramIsAnonymous else paramName
+
+        if paramIsAnonymous:
+            return (elementName, anonymousParamToElement[place])
+        else:
+            return (elementName, namedParamToElement[place])
+
+
+    def attachMetadata(metadataContainer, key, value):
+        if value:
+            XML.SubElement(metadataContainer, 'value', attrib={'key': key}).text = value
+
+    logger.debug("starting injection serialization for %s accumInjection entries" % str(len(kb.accumInjections)))
+
+    for entry in kb.accumInjections:
+        logger.debug("starting serialization for injection set (target %s) with %s entries" % (entry.target, len(entry.injections)))
+
+        target = entry.target
+        injections = entry.injections
+
+        urlSplit = _urllib.parse.urlsplit(target.url)
+        url = "%s://%s%s" % (urlSplit.scheme, urlSplit.netloc, urlSplit.path)
+        originalUrlQuery = urlSplit.query
+
+        method = target.method
+        headers = target.headers or []
+
+        # Note: See `datatype.py` for `InjectionDict`
+        for injection in injections:
+            logger.debug("serializing injection on param %s with %s sample entries" % (injection.parameter, str(len(injection.data))))
+
+            injectedParam = injection.parameter
+            clauseSummary = ", ".join([PAYLOAD.CLAUSE[clause] for clause in injection.clause])
+            dbmsVersionSummary = ", ".join(injection.dbms_version) if injection.dbms_version else None
+
+            for stype, sdata in injection.data.items():
+                logger.debug("starting serialization for injection sample of type %s" % PAYLOAD.SQLINJECTION[stype])
+
+                # Setup for top-level elements of this finding
+                finding = XML.SubElement(findings, 'finding', attrib={'severity': 'high'})
+                XML.SubElement(finding, 'tool', attrib={
+                    'name': 'sqlmap',
+                    'category': PAYLOAD.SQLINJECTION[stype],
+                    'code': sdata.title
+                })
+
+                XML.SubElement(finding, 'cwe', attrib={'id': '89'})
+
+                # TODO - This is for 2.5 XML format, though data is (unintentionally) being
+                #        written with 2.0 format. Will either need to remove this or update
+                #        export to more recent version for ingest
+                elementName, elementType = paramToCodeDxElement(injectedParam, injection.place)
+                xmlElement = XML.SubElement(finding, 'element', attrib={'type': elementType})
+                if elementName is not None:
+                    xmlElement.set('name', elementName)
+
+                currentPayload = agent.adjustLateValues(sdata.payload)
+
+                location = XML.SubElement(finding, 'location', attrib={
+                    'type': 'url',
+                    'path': currentPayload if injection.place == PLACE.URI else url
+                })
+                variants = XML.SubElement(location, 'variants')
+                variant = XML.SubElement(variants, 'variant')
+
+                # Resolve request/response data for this specific finding
+
+                # We now insert the payload appropriately for all known cases (as far as we can tell), but
+                # keep track of whether the payload was actually handled just in case. (If it wasn't handled
+                # for whatever reason, it will be attached as metadata on the finding)
+                payloadHandled = False
+
+                currentUrl = url
+                if injection.place == PLACE.URI:
+                    currentUrl = currentPayload
+                    payloadHandled = True
+
+                currentQuery = originalUrlQuery
+                if injection.place == PLACE.GET:
+                    currentQuery = currentPayload
+                    payloadHandled = True
+
+                currentRequestBody = None
+                if injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
+                    currentRequestBody = currentPayload
+                    payloadHandled = True
+
+                currentMethod = method or injectionPlaceToMethod.get(injection.place)
+                if currentMethod is None:
+                    logger.warn("Unable to infer HTTP method used for injection %s, defaulting to GET" % sdata.title)
+                    currentMethod = HTTPMETHOD.GET
+
+                currentHeaders = list(headers)
+
+                if injection.place == PLACE.COOKIE:
+                    currentHeaders.append(('Cookie', currentPayload))
+                    payloadHandled = True
+                elif injection.place == PLACE.CUSTOM_HEADER:
+                    currentHeaders.append((injection.parameter, currentPayload))
+                    payloadHandled = True
+                elif injection.place == PLACE.HOST:
+                    currentHeaders.append(('Host', currentPayload))
+                    payloadHandled = True
+                elif injection.place == PLACE.REFERER:
+                    currentHeaders.append(('Referer', currentPayload))
+                    payloadHandled = True
+                elif injection.place == PLACE.USER_AGENT:
+                    currentHeaders.append(('User-Agent', currentPayload))
+                    payloadHandled = True
+
+                currentHeaders = _collapseHeaderValues(currentHeaders)
+
+                request = XML.SubElement(variant, 'request', attrib={
+                    'method': currentMethod,
+                    'path': currentUrl,
+                    'query': currentQuery
+                })
+
+                if len(currentHeaders) > 0:
+                    requestHeaders = XML.SubElement(request, 'headers')
+                    requestHeaders.text = '\n'.join(['%s: %s' % (key, value) for (key, value) in headers])
+
+                if currentRequestBody is not None and injection.place in [PLACE.POST, PLACE.CUSTOM_POST]:
+                    requestBody = XML.SubElement(request, 'body', attrib={'truncated': 'false', 'original-length': str(len(currentRequestBody)), 'length': str(len(currentRequestBody))})
+                    requestAsBase64 = base64.b64encode(currentRequestBody.encode("UTF-8"))
+                    requestBody.text = str(requestAsBase64, encoding='UTF-8')
+
+                # TODO - Capture response info (headers + response body)
+
+                # Attach metadata info
+                metadata = XML.Element('metadata')
+                attachMetadata(metadata, 'clause', clauseSummary)
+                attachMetadata(metadata, 'dbms', injection.dbms)
+                attachMetadata(metadata, 'dbms_version', dbmsVersionSummary)
+                attachMetadata(metadata, 'payload_type', PAYLOAD.PARAMETER[injection.ptype])
+                attachMetadata(metadata, 'payload_prefix', injection.prefix)
+                attachMetadata(metadata, 'payload_suffix', injection.suffix)
+
+                # Vector is generic info on the vuln., as a broader description than just
+                # the data payload
+                #
+                # Storage here is just a copy/paste of what's used in `_formatInjection`,
+                # don't have test cases that show `vector` data at this time
+                vector = sdata.vector
+                if stype == PAYLOAD.TECHNIQUE.UNION:
+                    vector = agent.forgeUnionQuery("[QUERY]", vector[0], vector[1], vector[2], None, None, vector[5], vector[6])
+                elif sdata.comment:
+                    vector = "%s%s" % (vector, sdata.comment)
+
+                if vector is not None:
+                    if not isinstance(vector, str):
+                        logger.warn("vector is not `None` but also isn't a string; converting to string")
+                        vector = str(vector)
+                        logger.warn("vector converted to: %s" % vector)
+                    
+                    XML.SubElement(metadata, 'value', attrib={'key': 'vector'}).text = vector
+
+                # Without a complete test suite we can't verify that we're handling all possible
+                # values correctly. This provides some sort of fallback for that case
+                if not payloadHandled:
+                    logger.warn("Failed to determine payload data storage method (unexpected edge-case), will store as metadata instead")
+
+                    currentPayload = str(currentPayload)
+                    payloadSize = len(currentPayload)
+
+                    if payloadSize > (10*1024):
+                        logger.warn("Payload is too large for metadata storage at %s characters, truncating to 10KB" % payloadSize)
+                        currentPayload = currentPayload[:10*1024]
+
+                    xmlPayload = XML.SubElement(metadata, 'value', attrib={'key': 'payload'})
+                    xmlPayload.text = currentPayload
+
+                # "Elements with no subelements will test as False." - ElementTree docs
+                if metadata:
+                    finding.append(metadata)
+
+    logger.debug("finished XML tree generation")
+
+    logger.debug("applying readable xML formatting before writing to file")
+    _indentXmlTree(root)
+
+    logger.debug("writing XML document to disk at %s..." % conf.codeDxReport)
+    tree = XML.ElementTree(root)
+    tree.write(conf.codeDxReport, encoding = 'UTF-8', xml_declaration = True)
+    logger.debug("code dx report export done")
 
 @stackedmethod
 def start():
@@ -698,6 +1061,18 @@ def start():
 
                 if condition:
                     action()
+            
+            if len(kb.injections) > 0:
+                kb.accumInjections.append(AttribDict({
+                    'injections': kb.injections,
+                    'target': AttribDict({
+                        'url': targetUrl,
+                        'data': targetData,
+                        'method': targetMethod,
+                        'cookie': targetCookie,
+                        'headers': conf.httpHeaders
+                    })
+                }))
 
         except KeyboardInterrupt:
             if conf.multipleTargets:
@@ -752,5 +1127,7 @@ def start():
             infoMsg = "you can find results of scanning in multiple targets "
             infoMsg += "mode inside the CSV file '%s'" % conf.resultsFile
             logger.info(infoMsg)
+    
+    _saveToCodeDxReport()
 
     return True
