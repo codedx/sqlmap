@@ -10,8 +10,10 @@ This fork of sqlmap adds flags for generating reports in the Code Dx XML format.
 
 ### Quickstart
 
+This sqlmap fork can be retrieved through Git, as in the example below, or [from the Github release packages](https://github.com/codedx/sqlmap/releases).
+
 ```
-git clone https://github.com/codedx/sqlmap
+git clone --depth 1 https://github.com/codedx/sqlmap
 cd sqlmap
 python sqlmap.py --codedx <target-file> <... other args>
 ```
