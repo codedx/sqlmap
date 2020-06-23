@@ -39,8 +39,8 @@ def vulnTest():
 
     TESTS = (
         ("-h", ("to see full list of options run with '-hh'",)),
-        ("-u <url> --flush-session --wizard --check-internet", ("Please choose:", "back-end DBMS: SQLite", "current user is DBA: True", "banner: '3.", "~no connection detected")),
         ("--dependencies", ("sqlmap requires", "third-party library")),
+        ("-u <url> --flush-session --wizard", ("Please choose:", "back-end DBMS: SQLite", "current user is DBA: True", "banner: '3.")),
         (u"-c <config> --flush-session --roles --statements --hostname --privileges --sql-query=\"SELECT '\u0161u\u0107uraj'\" --technique=U", (u": '\u0161u\u0107uraj'", "on SQLite it is not possible")),
         (u"-u <url> --flush-session --sql-query=\"SELECT '\u0161u\u0107uraj'\" --technique=B --no-escape --string=luther --unstable", (u": '\u0161u\u0107uraj'",)),
         ("--dummy", ("all tested parameters do not appear to be injectable", "does not seem to be injectable", "there is not at least one", "~might be injectable")),
@@ -86,9 +86,13 @@ def vulnTest():
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((address, port))
-            break
+            s.send(b"GET / HTTP/1.0\r\n\r\n")
+            if b"vulnserver" in s.recv(4096):
+                break
         except:
             time.sleep(1)
+        finally:
+            s.close()
 
     handle, config = tempfile.mkstemp(suffix=".conf")
     os.close(handle)
