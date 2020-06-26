@@ -20,9 +20,9 @@ from thirdparty.six import unichr as _unichr
 # sqlmap version (<major>.<minor>.<month>.<monthly commit>)
 # (codedx fork version suffix (cdx-<major>.<minor>))
 VERSION = "1.4.6.12-cdx-1.0"
-TYPE = "dev" if VERSION.count('.') > 2 and VERSION.split('.')[-1] != '0' else "stable"
+TYPE = "dev"
 TYPE_COLORS = {"dev": 33, "stable": 90, "pip": 34}
-VERSION_STRING = "sqlmap/%s#%s" % ('.'.join(VERSION.split('.')[:-1]) if VERSION.count('.') > 2 and VERSION.split('.')[-1] == '0' else VERSION, TYPE)
+VERSION_STRING = "sqlmap/%s#%s" % (VERSION, TYPE)
 DESCRIPTION = "automatic SQL injection and database takeover tool"
 SITE = "http://sqlmap.org"
 DEFAULT_USER_AGENT = "%s (%s)" % (VERSION_STRING, SITE)
