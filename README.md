@@ -43,7 +43,7 @@ Both approaches are valid and indistinguishable, you do not lose any data or fea
 
 ## Disclaimer
 
-This fork has been ran through a number of test cases, and all test cases have passed manual validation. Due to the range of sqlmap features, we can't guarantee that all detected injections will be reported in all cases. When first using this fork, we recommend comparing the generated XML against the injections listed by sqlmap in the console. Please report any cases of missing results as a new issue on this repository, or send an email to us at `support@codedx.com`.
+This fork has been [ran through a number of test cases](samples/), and all test cases have passed manual validation. Due to the range of sqlmap features, we can't guarantee that all detected injections will be reported in all cases. When first using this fork, we recommend comparing the generated XML against the injections listed by sqlmap in the console. Please report any cases of missing results as a new issue on this repository, or send an email to us at `support@codedx.com`.
 
 If there are no missed injections between the XML and console output, it should be safe to continue using this fork while assuming that all injections will be reported. This validation should be repeated if you make significant changes to your sqlmap configuration. (eg different set of target URLs, different set of parameters, etc.)
 
